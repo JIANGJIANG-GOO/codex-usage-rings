@@ -1,0 +1,15 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "codex-usage-rings",
+  "version": "0.3.2",
+  "description": "Windows companion overlay showing remaining Codex 7d and 5h quota above the account avatar.",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Codex 用量圆环",
+        "shortDescription": "7d / 5h 剩余额度自动贴附圆环",
+        "longDescription": "Windows 本地伴随程序。圆心显示 7d 或 5h，圆周表示剩余额度；剩余大于 15% 为绿色，否则红色。通过 Codex 内置 app-server 读取额度；7d 未知时灰环，5h 无有效额度时隐藏。自动定位前台 Codex 的账户按钮，无法可靠定位时隐藏。支持启动、停止和状态诊断。"
+      }
+    }
+  }
+}

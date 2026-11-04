@@ -1,0 +1,12 @@
+{
+  "name": "codex-usage-rings",
+  "version": "0.3.2",
+  "description": "Windows local companion for remaining 7d and 5h Codex quota rings.",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex 用量圆环",
+    "shortDescription": "7d / 5h 剩余额度自动贴附圆环",
+    "longDescription": "Windows 本地浮层。自动定位账户按钮上方的两个位置，显示 7d / 5h 剩余额度。大于 15% 为绿色，小于等于 15% 为红色，未知或过期为灰色虚线。支持启动、停止和状态诊断。",
+    "capabilities": ["Local companion", "Read quota"]
+  }
+}
