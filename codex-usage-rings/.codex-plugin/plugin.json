@@ -1,6 +1,6 @@
 {
   "name": "codex-usage-rings",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Windows local companion for remaining 7d and 5h Codex quota rings.",
   "skills": "./skills/",
   "interface": {

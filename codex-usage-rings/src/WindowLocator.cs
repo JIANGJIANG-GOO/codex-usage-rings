@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -108,11 +108,11 @@ namespace CodexUsageRings
 
         public AnchorResult FindAnchor()
         {
-            return FindAnchor(false);
+            return FindAnchor(true);
         }
 
-        // Background inspection is intended for the explicit read-only diagnostic.
-        // The ordinary renderer uses the foreground-only overload above.
+        // Embedded rings remain attached when another application gains focus.
+        // Background selection still requires one unambiguous visible Codex host.
         public AnchorResult FindAnchor(bool allowBackground)
         {
             ScanJob job;
@@ -251,7 +251,7 @@ namespace CodexUsageRings
             {
                 foreach (IntPtr hwnd in windows)
                 {
-                    reason = "Unique visible Codex desktop selected for background diagnostic";
+                    reason = "Unique visible Codex desktop selected in background";
                     return hwnd;
                 }
             }

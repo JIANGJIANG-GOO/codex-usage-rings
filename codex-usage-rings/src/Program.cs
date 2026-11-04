@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -56,7 +56,7 @@ namespace CodexUsageRings
         {
             DateTime now = DateTime.UtcNow;
             return new {
-                version = "0.3.2", checkedAtUtc = now.ToString("o"), pid = System.Diagnostics.Process.GetCurrentProcess().Id,
+                version = "0.3.3", checkedAtUtc = now.ToString("o"), pid = System.Diagnostics.Process.GetCurrentProcess().Id,
                 effects = new { purple = visible && mode!=null && mode.ModelFresh(now) && mode.Ultra, fastFlow = visible && mode!=null && mode.Fresh(now) && mode.Fast && (renderGuard==null||renderGuard.MotionAllowed(now)) },
                 presentation = "native-child", embedded = embedded, hover = hover,
                 rendering = renderGuard,
@@ -185,7 +185,9 @@ namespace CodexUsageRings
                 });
             }
             AnchorResult current=anchor;
-            bool show=current!=null && current.Found && ((now-anchorAt).TotalSeconds<2 || WindowLocator.IsMoving(current.Hwnd)) && WindowLocator.IsForeground(current.Hwnd);
+            // Native child windows inherit host occlusion and minimization; focus
+            // belongs to mode/hover detection, not quota-ring visibility.
+            bool show=current!=null && current.Found && ((now-anchorAt).TotalSeconds<2 || WindowLocator.IsMoving(current.Hwnd));
             Rectangle actualHost=show?WindowLocator.GetHostBounds(current.Hwnd):Rectangle.Empty;
             if(show && (actualHost.IsEmpty || Math.Abs(WindowLocator.GetScale(current.Hwnd)-current.Scale)>.01f)) show=false;
             if(current!=null && current.Found) { lastModeHost=current.Hwnd;lastModeHostSeen=now; }
