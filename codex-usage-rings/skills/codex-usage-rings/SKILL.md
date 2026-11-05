@@ -5,10 +5,10 @@ description: 启动、停止或诊断 Windows Codex 用量圆环浮层；在头�
 
 ## 用量圆环
 
-本技能目录向上两级是插件根目录。按用户要求运行根目录的脚本：
+安装或更新优先运行仓库/安装包根目录的 Install.ps1；-DownloadLatest 会下载并校验最新 Release。默认固定安装位置为 %LOCALAPPDATA%\CodexUsageRings\app，检查其中 install-result.json 的注册与运行结果。管理已安装程序时，优先使用该目录下 codex-usage-rings 的脚本；自定义安装目录可从 CodexUsageRings 计划任务的 Execute 和 WorkingDirectory 确认，程序名必须为 CodexUsageRings.exe。不要无意从插件缓存目录启动另一份程序。无固定安装时，本技能目录向上两级是插件根目录。按用户要求运行根目录的脚本：
 
 - 启动：`Start.ps1`。后台启动无边框圆环，不修改 Codex 安装文件。
-- 登录自启：`AutoStart.ps1` 注册当前用户独立计划任务；`AutoStart.ps1 -Remove` 取消。已有任务时 Start.ps1 通过任务启动。
+- 登录自启：`AutoStart.ps1` 注册当前用户独立计划任务；`AutoStart.ps1 -Remove` 取消。已有任务时 Start.ps1 核对程序路径、工作目录和参数，旧路径会先修复再启动。
 - 停止：`Stop.ps1`。只通知本圆环进程退出。
 - 查看状态：`Status.ps1`。读取状态和运行进程；不要把启动成功当成已成功定位。
 - 重建：只有用户要求修改程序或可执行文件缺失时运行 `Build.ps1`。

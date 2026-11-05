@@ -1,6 +1,5 @@
 ﻿$ErrorActionPreference = 'Stop'
-$marketplaceRoot = $PSScriptRoot
+. (Join-Path $PSScriptRoot 'codex-usage-rings\Install-Helpers.ps1')
 $codexCommand = Get-Command codex -ErrorAction Stop
-& $codexCommand.Source plugin marketplace add $marketplaceRoot
-if ($LASTEXITCODE -ne 0) { throw 'Marketplace registration failed.' }
-Write-Output 'Marketplace registered. Install with: codex plugin add codex-usage-rings@local-usage-rings, or open the Plugins Directory and choose local-usage-rings.'
+Register-UsageMarketplace $codexCommand.Source $PSScriptRoot
+Write-Output 'Marketplace registered. Install with: codex plugin add codex-usage-rings@local-usage-rings, or use Install.ps1 for the complete installation.'

@@ -14,32 +14,49 @@
 
 ## 安装和启动
 
-1. 从本仓库 Releases 下载 `Codex-Usage-Rings-0.4.10.zip` 并完整解压到固定目录。
-2. 运行 `codex-usage-rings/Start.cmd`。停止时运行 `Stop.cmd`。
-3. 在 Codex 中展开模型菜单约 2 秒，让程序读取 Fast 开关。随后可关闭菜单；每次重启伴随程序后需重新读取一次。
+需要 Windows x64，以及已安装并登录的 Codex 桌面端。最新安装包包含预编译程序；无需另装开发工具链。
 
-需要登录自启时，在 PowerShell 中运行：
-
-```powershell
-.\codex-usage-rings\AutoStart.ps1
-```
-
-取消登录自启：
+1. 从 [最新 Release](https://github.com/JIANGJIANG-GOO/codex-usage-rings/releases/latest) 下载 `Codex-Usage-Rings-0.4.11.zip` 和 `SHA256SUMS.txt`，校验 SHA-256 后完整解压。
+2. 在解压目录运行：
 
 ```powershell
-.\codex-usage-rings\AutoStart.ps1 -Remove
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1
 ```
 
-可选的 Codex 插件注册（需要可用的 `codex` 命令）：
+安装器会将文件放到 `%LOCALAPPDATA%\CodexUsageRings\app`，缺少程序时用系统 .NET Framework 编译器构建；自动迁移本插件的旧市场注册、安装插件、更新当前用户登录自启任务并启动。无需管理员权限。重复运行可更新现有安装；旧进程会先收到正常退出信号，不强制终止 Codex。
+
+安装完成后输出 JSON，并保存到安装目录的 `install-result.json`。`running=true` 仅表示实际进程路径、运行版本和新鲜状态记录一致；`display=visible` 才表示圆环已显示。Codex 未打开、最小化或暂未定位时会报告 `waiting-for-Codex-or-anchor`。
+
+找不到 `codex` 命令时，伴随程序仍可安装，但 `pluginRegistration` 会明确报告 `pending-cli-unavailable`；注册失败则报告 `pending-registration-failed`，不能当作插件注册成功。修复 CLI 后再次运行安装器即可。
+
+首次或重启伴随程序后，展开模型菜单一次以读取 Fast 开关；之后快速开关通过状态事件同步。安装器不会更改模型或 1.5x 设置。
+
+### 让 AI 安装
+
+将下面这段话连同仓库链接交给能执行本机命令的 AI：
+
+> 请在这台 Windows 电脑安装 https://github.com/JIANGJIANG-GOO/codex-usage-rings 的最新稳定版。下载仓库源码后，阅读 README 和 Install.ps1，运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1 -DownloadLatest`。安装器会下载最新 Release 并验证 SHA-256，完成安装、插件注册、自启和运行验证。请检查输出的版本、安装路径、pluginRegistration、running 和 display；如果注册待完成或圆环尚未显示，请如实反馈，不要把进程启动等同于完全安装成功。首次 Fast 检测需要我展开模型菜单，不要代我改变模型或开关。
+
+已保存安装器的用户也可以用同一命令更新最新版，避免固定下载旧版本。
+
+### 安装选项和管理
 
 ```powershell
-.\Register-plugin.ps1
-codex plugin add codex-usage-rings@local-usage-rings
+# 从最新 Release 下载、校验并安装
+.\Install.ps1 -DownloadLatest
+# 自定义固定目录
+.\Install.ps1 -InstallDir 'D:\Apps\CodexUsageRings'
+# 只安装伴随程序，不注册 Codex 插件
+.\Install.ps1 -SkipPluginRegistration
+# 不使用登录自启；同时移除已有的本插件自启任务
+.\Install.ps1 -NoAutoStart
+# 安装后不启动；输出 running=false，不进行启动验证
+.\Install.ps1 -NoStart
 ```
 
-## 升级已有安装
+进入安装目录下的 `codex-usage-rings`，运行 `Stop.cmd` 停止、`Start.cmd` 启动、`Status.ps1` 诊断。默认隐藏托盘图标。`AutoStart.ps1 -Remove` 可取消自启。
 
-先运行旧目录的 `codex-usage-rings/Stop.cmd`，再将新安装包完整解压覆盖到原固定目录，然后运行 `Start.cmd`。若改用新目录且以前设置过登录自启，请先在新目录运行 `AutoStart.ps1` 更新任务路径，再启动，避免旧任务继续运行旧版。
+更换目录时，安装器会更新旧任务；直接运行新目录的 `Start.ps1` 也会核对任务的程序路径、工作目录和参数，发现旧路径先修复再启动。手动安装而不使用统一入口时，可运行根目录 `Register-plugin.ps1`，再运行 `codex plugin add codex-usage-rings@local-usage-rings`。
 
 ## 从源码构建
 
@@ -51,6 +68,7 @@ Windows x64，使用系统 .NET Framework 4.x 自带 C# 编译器，不需下载
 .\codex-usage-rings\Test-Native.ps1
 .\codex-usage-rings\Test-Hover.ps1
 .\codex-usage-rings\Test-Reset.ps1
+.\codex-usage-rings\Test-Install.ps1
 ```
 
 源码仓库不包含编译产物；`Start.cmd` 会在程序缺失时尝试构建。Release 安装包包含预编译程序。
@@ -67,9 +85,11 @@ Codex 窗口可见且定位可靠时显示；切换到其他应用不隐藏圆�
 
 运行 `codex-usage-rings/Status.ps1`。状态文件位于 `%LOCALAPPDATA%/CodexUsageRings/status.json`，包含定位、模式识别、绘制与悬停诊断。
 
-v0.4.10 验证：319 项常规检查、64,000 帧渲染、135 项悬停检查；原生窗口移动、重连、后台显示、最小化与恢复测试通过；用户实机确认切换应用和切回均正常。
+v0.4.11 验证：319 项常规检查、64,000 帧渲染、135 项悬停检查；原生窗口移动、重连、后台显示、最小化与恢复测试通过；用户实机确认切换应用和切回均正常。
 
-当前源码包含后台 Fast 刷新、切换思考强度时保留 Fast 状态，以及手动重置卡面板；Release 安装包为 v0.4.10。
+统一安装器另有 33 项隔离检查，涵盖旧任务路径、首次和重复安装、源码构建、下载校验、版本冲突及启动状态验证。已在本机实测插件注册与自启迁移。
+
+当前源码包含后台 Fast 刷新、切换思考强度时保留 Fast 状态，以及手动重置卡面板；Release 安装包为 v0.4.11。
 
 ## 重置卡
 

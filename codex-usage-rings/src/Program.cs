@@ -56,7 +56,7 @@ namespace CodexUsageRings
         {
             DateTime now = DateTime.UtcNow;
             return new {
-                version = "0.4.10", checkedAtUtc = now.ToString("o"), pid = System.Diagnostics.Process.GetCurrentProcess().Id,
+                version = "0.4.11", checkedAtUtc = now.ToString("o"), pid = System.Diagnostics.Process.GetCurrentProcess().Id,
                 effects = new { purple = visible && mode!=null && mode.ModelFresh(now) && mode.Ultra, fastFlow = visible && mode!=null && mode.Fresh(now) && mode.Fast && (renderGuard==null||renderGuard.MotionAllowed(now)) },
                 presentation = "native-child", embedded = embedded, hover = hover,
                 rendering = renderGuard,
