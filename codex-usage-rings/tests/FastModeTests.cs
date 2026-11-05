@@ -36,10 +36,16 @@ public static class FastModeTests {
   var closed=new ModeState();memory.Apply(closed,"chat-A","Astra High",now.AddSeconds(5));
   Check(closed.FastKnown && closed.Fast,"closing menu retains confirmed Fast for same chat and model");
   var other=new ModeState();memory.Apply(other,"chat-B","Astra High",now.AddSeconds(6));Check(!other.FastKnown && !other.Fast,"another chat cannot inherit Fast");
-  var changed=new ModeState();memory.Apply(changed,"chat-A","Astra Medium",now.AddSeconds(7));Check(!changed.FastKnown,"unobserved model change invalidates stale state");
+  var changed=new ModeState();memory.Apply(changed,"chat-A","Astra Medium",now.AddSeconds(7));Check(changed.FastKnown&&changed.Fast,"effort-only change retains confirmed Fast");
+  foreach(string effort in new[]{"Low","Medium","High","Extra High","XHigh","Ultra","Minimal"}) {
+   var effortState=new ModeState();memory.Apply(effortState,"chat-A","Astra "+effort,now.AddSeconds(7));
+   Check(effortState.FastKnown&&effortState.Fast,"Fast survives effort change to "+effort);
+  }
+  var differentModel=new ModeState();memory.Apply(differentModel,"chat-A","Sol Medium",now.AddSeconds(7));Check(!differentModel.FastKnown,"actual model change invalidates stale Fast");
   memory.Apply(new ModeState{FastKnown=true,Fast=true},"chat-A","Astra Medium",now.AddSeconds(8));
   memory.Apply(new ModeState{FastKnown=true,Fast=false},"chat-A","Astra Medium",now.AddSeconds(9));
   var disabled=new ModeState();memory.Apply(disabled,"chat-A","Astra Medium",now.AddSeconds(10));Check(disabled.FastKnown && !disabled.Fast,"turning Fast off clears animation after menu closes");
+  var disabledEffort=new ModeState();memory.Apply(disabledEffort,"chat-A","Astra Ultra",now.AddSeconds(10));Check(disabledEffort.FastKnown&&!disabledEffort.Fast,"effort change must also retain confirmed Fast off");
   var unknown=new ModeState();memory.Apply(unknown,"","Astra Medium",now.AddSeconds(10));Check(!unknown.FastKnown,"unidentified chat does not inherit cached state");
   var modalMemory=new FastModeMemory();
   modalMemory.Apply(new ModeState(),"chat-A","Astra High",now);
@@ -49,6 +55,10 @@ public static class FastModeTests {
   modalMemory.Apply(new ModeState{Fast=false,FastKnown=true},"","",now.AddSeconds(3));
   var switchChat=new ModeState();modalMemory.Apply(switchChat,"chat-B","Astra High",now.AddSeconds(4));
   Check(!switchChat.FastKnown,"pending modal observation must not attach to different chat");
+  var effortMemory=new FastModeMemory();effortMemory.Apply(new ModeState(),"chat-A","GPT-6 Astra High",now);
+  effortMemory.Apply(new ModeState{FastKnown=true,Fast=true},"","",now.AddSeconds(1));
+  var afterEffort=new ModeState();effortMemory.Apply(afterEffort,"chat-A","GPT-6 Astra Ultra",now.AddSeconds(2));
+  Check(afterEffort.FastKnown&&afterEffort.Fast,"pending menu checkbox survives effort selection before menu closes");
   // Exact production failure: 82% remaining, 100% DPI, 08:00:00.005 UTC.
   using(var frame=Frame(new ModeState{Fast=true,CapturedAtUtc=now},now.AddMilliseconds(5),82))Check(frame.Width==36,"reported GDI+ arc failure does not recur");
   return count;

@@ -46,6 +46,9 @@ namespace CodexUsageRings {
   string lastContext="",lastModel="",pendingContext="",pendingModel="";DateTime lastSeen,pendingAt;bool? pending;
 
   public void Apply(ModeState state,string context,string model,DateTime now) {
+   // Composer labels include effort. Fast belongs to the selected model/chat,
+   // so an effort-only change must not invalidate a confirmed checkbox value.
+   model=Regex.Replace((model??"").Trim(),@"\s+(?:extra high|xhigh|ultra|high|medium|low|minimal)$","",RegexOptions.IgnoreCase);
    if(String.IsNullOrEmpty(context)||String.IsNullOrEmpty(model)) {
     if(state.FastKnown && !String.IsNullOrEmpty(lastContext) && (now-lastSeen).TotalMinutes<2) {
      pending=state.Fast;pendingContext=lastContext;pendingModel=lastModel;pendingAt=now;

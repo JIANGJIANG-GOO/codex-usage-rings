@@ -56,7 +56,7 @@ namespace CodexUsageRings
         {
             DateTime now = DateTime.UtcNow;
             return new {
-                version = "0.3.3", checkedAtUtc = now.ToString("o"), pid = System.Diagnostics.Process.GetCurrentProcess().Id,
+                version = "0.3.5", checkedAtUtc = now.ToString("o"), pid = System.Diagnostics.Process.GetCurrentProcess().Id,
                 effects = new { purple = visible && mode!=null && mode.ModelFresh(now) && mode.Ultra, fastFlow = visible && mode!=null && mode.Fresh(now) && mode.Fast && (renderGuard==null||renderGuard.MotionAllowed(now)) },
                 presentation = "native-child", embedded = embedded, hover = hover,
                 rendering = renderGuard,
@@ -191,7 +191,9 @@ namespace CodexUsageRings
             Rectangle actualHost=show?WindowLocator.GetHostBounds(current.Hwnd):Rectangle.Empty;
             if(show && (actualHost.IsEmpty || Math.Abs(WindowLocator.GetScale(current.Hwnd)-current.Scale)>.01f)) show=false;
             if(current!=null && current.Found) { lastModeHost=current.Hwnd;lastModeHostSeen=now; }
-            if(WindowLocator.IsForeground(lastModeHost) && (now-lastModeHostSeen).TotalMinutes<2 && !readingMode && now>=nextMode) {
+            // Background native children remain visible, so refresh mode evidence
+            // there too instead of letting the four-second Fast sample expire.
+            if(!WindowLocator.GetHostBounds(lastModeHost).IsEmpty && (now-lastModeHostSeen).TotalMinutes<2 && !readingMode && now>=nextMode) {
                 readingMode=true; nextMode=now.AddMilliseconds(250);
                 IntPtr hostHandle=lastModeHost;
                 Task.Factory.StartNew(delegate { try { var found=modeDetector.Read(hostHandle); if(!closing) mode=found; } finally { readingMode=false; } });

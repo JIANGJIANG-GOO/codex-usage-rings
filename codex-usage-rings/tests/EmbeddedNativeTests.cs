@@ -1,4 +1,4 @@
-using System;using System.Drawing;using System.Runtime.InteropServices;using System.Windows.Forms;using CodexUsageRings;
+﻿using System;using System.Drawing;using System.Runtime.InteropServices;using System.Windows.Forms;using CodexUsageRings;
 class EmbeddedNativeTests {
  static void Set(object target,string name,object value){target.GetType().GetField(name,System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).SetValue(target,value);}
  static void CheckBackgroundVisibility(Form host){
@@ -13,6 +13,15 @@ class EmbeddedNativeTests {
  if(WindowLocator.IsForeground(host.Handle))throw new Exception("Background test host still foreground");
  tick.Invoke(context,new object[]{null,EventArgs.Empty});
  if(!overlay.Visible||!overlay.Embedded)throw new Exception("Background host lost embedded quota rings");
+ Set(context,"nextMode",DateTime.MinValue);
+ tick.Invoke(context,new object[]{null,EventArgs.Empty});
+ var scheduled=(DateTime)typeof(OverlayContext).GetField("nextMode",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).GetValue(context);
+ if(scheduled==DateTime.MinValue)throw new Exception("Visible background host stopped refreshing Fast mode; animation expires after 4 seconds");
+ Set(context,"nextMode",DateTime.MaxValue);
+ var readField=typeof(OverlayContext).GetField("readingMode",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
+ var readDeadline=DateTime.UtcNow.AddSeconds(4);
+ while((bool)readField.GetValue(context)&&DateTime.UtcNow<readDeadline)System.Threading.Thread.Sleep(20);
+ if((bool)readField.GetValue(context))throw new Exception("Background mode reader did not complete");
  host.WindowState=FormWindowState.Minimized;Application.DoEvents();tick.Invoke(context,new object[]{null,EventArgs.Empty});
  if(overlay.Visible)throw new Exception("Minimized host must hide rings");
  host.WindowState=FormWindowState.Normal;other.Activate();Application.DoEvents();Set(context,"anchorAt",DateTime.UtcNow);tick.Invoke(context,new object[]{null,EventArgs.Empty});
