@@ -1,0 +1,17 @@
+# Native integration check: creates only its own off-screen test host.
+$ErrorActionPreference = 'Stop'
+$frameworkPath = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
+$compilerPath = Join-Path $frameworkPath 'csc.exe'
+$binaryDirectory = Join-Path $PSScriptRoot 'bin'
+New-Item -ItemType Directory -Force -Path $binaryDirectory | Out-Null
+$sourceFiles = @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -Filter '*.cs' | ForEach-Object FullName)
+$testFiles = @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'tests') -Filter '*.cs' | ForEach-Object FullName)
+$references = @('System.dll','System.Core.dll','System.Drawing.dll','System.Windows.Forms.dll','System.Web.Extensions.dll', (Join-Path $frameworkPath 'WPF\UIAutomationClient.dll'), (Join-Path $frameworkPath 'WPF\UIAutomationTypes.dll'), (Join-Path $frameworkPath 'WPF\WindowsBase.dll'))
+$testPath = Join-Path $binaryDirectory 'ResetTests.exe'
+$compilerArgs = @('/nologo','/target:exe','/platform:x64','/main:ResetNativeTests',('/out:' + $testPath))
+$compilerArgs += @('/win32manifest:' + (Join-Path $PSScriptRoot 'app.manifest'))
+$compilerArgs += @($references | ForEach-Object { '/r:' + $_ })
+& $compilerPath @compilerArgs @sourceFiles @testFiles
+if ($LASTEXITCODE -ne 0) { throw 'Test compilation failed.' }
+& $testPath
+if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }

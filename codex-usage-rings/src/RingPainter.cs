@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
@@ -9,7 +9,7 @@ namespace CodexUsageRings
     {
         public static void Draw(Graphics g, RingLayout layout, UsageSnapshot snapshot, DateTime now)
         { Draw(g,layout,snapshot,now,null); }
-        public static void Draw(Graphics g, RingLayout layout, UsageSnapshot snapshot, DateTime now, ModeState mode, bool allowMotion = true)
+        public static void Draw(Graphics g, RingLayout layout, UsageSnapshot snapshot, DateTime now, ModeState mode, bool allowMotion = true, RefillFrame weekRefill=null, RefillFrame fiveRefill=null)
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
@@ -17,15 +17,44 @@ namespace CodexUsageRings
             bool fast=allowMotion && mode!=null && mode.Fresh(now) && mode.Fast;
             RingVisual week=RingVisual.From(snapshot,snapshot==null?null:snapshot.Week,now);
             RingVisual five=RingVisual.From(snapshot,snapshot==null?null:snapshot.FiveHour,now);
+            if(!allowMotion){weekRefill=null;fiveRefill=null;}
+            week=RefillVisual(week,weekRefill);five=RefillVisual(five,fiveRefill);
             double seconds=allowMotion ? now.TimeOfDay.TotalSeconds : 0;
             using(Brush fill=purple ? CreateUltraBrush(layout.Week,seconds) : null)
                 DrawOne(g, layout.Week, "7d", week, layout.Scale,fill);
-            if(fast) DrawFlow(g,layout.Week,week,layout.Scale,now);
+            if(weekRefill!=null)DrawRefill(g,layout.Week,weekRefill,layout.Scale);
+            else if(fast) DrawFlow(g,layout.Week,week,layout.Scale,now);
             if(five.Known) {
                 using(Brush fill=purple ? CreateUltraBrush(layout.FiveHour,seconds) : null)
                     DrawOne(g, layout.FiveHour, "5h", five, layout.Scale,fill);
-                if(fast) DrawFlow(g,layout.FiveHour,five,layout.Scale,now);
+                if(fiveRefill!=null)DrawRefill(g,layout.FiveHour,fiveRefill,layout.Scale);
+                else if(fast) DrawFlow(g,layout.FiveHour,five,layout.Scale,now);
             }
+        }
+        static RingVisual RefillVisual(RingVisual actual,RefillFrame frame){
+            if(frame==null||!actual.Known)return actual;
+            return new RingVisual{Known=true,Remaining=frame.Remaining,SweepAngle=(float)(frame.Remaining*3.6),Color=frame.Remaining>15?RingVisual.Green:RingVisual.Red,Reason=""};
+        }
+        static void DrawRefill(Graphics g,RectangleF rect,RefillFrame frame,float scale){
+            if(frame.Gathering){
+                double end=(frame.Remaining*3.6-90)*Math.PI/180;
+                for(int i=0;i<8;i++){
+                    double phase=frame.Progress*2.6+i/8.0;phase-=Math.Floor(phase);
+                    double ease=1-Math.Pow(1-phase,2);
+                    PointF point=RefillParticlePoint(rect,end,(float)((4+Seed(i,62)*3.5)*scale*(1-ease)));
+                    float x=point.X,y=point.Y;
+                    float size=(float)(1.2+Seed(i,63)*.9)*scale;
+                    int alpha=(int)(210*Math.Sin(Math.PI*phase)*Math.Min(1,(1-frame.Progress)*8));
+                    using(var dot=new SolidBrush(Color.FromArgb(Math.Max(0,alpha),85,236,164)))g.FillEllipse(dot,x-size/2,y-size/2,size,size);
+                }
+            }
+            if(frame.Flash>0)using(var flash=new Pen(Color.FromArgb((int)(90*frame.Flash),255,255,255),StrokeWidth*scale))g.DrawEllipse(flash,rect);
+        }
+        internal static PointF RefillParticlePoint(RectangleF rect,double angle,float distance){
+            // Approach the arc endpoint along its tangent, entirely outside the
+            // circle. No radial interpolation through the center or label.
+            float cosine=(float)Math.Cos(angle),sine=(float)Math.Sin(angle),r=rect.Width/2;
+            return new PointF(rect.Left+r+cosine*r+sine*distance,rect.Top+rect.Height/2+sine*r-cosine*distance);
         }
         public static readonly Color Purple=Color.FromArgb(177,115,255);
         public const float StrokeWidth=4f;

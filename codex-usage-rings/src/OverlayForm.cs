@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
@@ -10,6 +10,14 @@ namespace CodexUsageRings
     {
         readonly Timer hoverTimer = new Timer { Interval = 75 };
         QuotaTooltipForm tip;
+        ResetCardsForm cards;
+        IResetCardService resetService;
+        bool ringPressed;
+        public Action ResetFinished;
+        UsageSnapshot resetBefore;
+        readonly ResetRefill refill=new ResetRefill();
+        readonly System.Diagnostics.Stopwatch animationClock=System.Diagnostics.Stopwatch.StartNew();
+        public bool CardsVisible { get { return cards!=null&&!cards.IsDisposed&&cards.Presented; } }
         string hoveredRing;
         DateTime hoverStartedUtc;
         DateTime hoverRetryUtc;
@@ -23,6 +31,7 @@ namespace CodexUsageRings
         public void BindToHost(IntPtr host) {
             if(host==IntPtr.Zero)throw new ArgumentException("Missing host");
             if(hostWindow==host && IsHandleCreated && GetParent(Handle)==host)return;
+            if(cards!=null)cards.HidePanel();
             hostWindow=host;Hide();
             if(IsHandleCreated)RecreateHandle();else CreateHandle();
             if(GetParent(Handle)!=host)throw new InvalidOperationException("Native child attachment failed");
@@ -43,10 +52,28 @@ namespace CodexUsageRings
                 catch(InvalidOperationException error) { HoverFailed(error); }
             };
             hoverTimer.Start();
-            VisibleChanged += delegate { if(!Visible) HideTooltip(); };
+            VisibleChanged += delegate { if(!Visible) { HideTooltip();if(cards!=null)cards.HidePanel(); } };
+        }
+        internal OverlayForm(IResetCardService service):this(){resetService=service;}
+        bool RingHit(Point p) { return layout!=null&&(Hit(layout.Week,p,layout.Scale)||(RingVisual.From(snapshot,snapshot==null?null:snapshot.FiveHour,DateTime.UtcNow).Known&&Hit(layout.FiveHour,p,layout.Scale))); }
+        protected override void OnMouseDown(MouseEventArgs e){base.OnMouseDown(e);ringPressed=e.Button==MouseButtons.Left&&RingHit(e.Location);}
+        protected override void OnMouseUp(MouseEventArgs e){base.OnMouseUp(e);bool click=ringPressed&&e.Button==MouseButtons.Left&&RingHit(e.Location);ringPressed=false;if(click)ToggleCards();}
+        internal void PrepareCards(){
+            if(cards!=null&&!cards.IsDisposed)return;
+            if(resetService==null)resetService=new ResetCardService();
+            cards=new ResetCardsForm(resetService);cards.Started=delegate{resetBefore=snapshot;};cards.Finished=delegate(ResetResult result){if(result.Success)refill.Arm(resetBefore??snapshot,DateTime.UtcNow,animationClock.ElapsedMilliseconds);resetBefore=null;if(ResetFinished!=null)ResetFinished();};
+            cards.Warmup();
+        }
+        internal void ToggleCards(){
+            if(CardsVisible){cards.HidePanel();return;}
+            if(layout==null||hostWindow==IntPtr.Zero)return;
+            HideTooltip();
+            PrepareCards();
+            cards.Present(hostWindow,PointToScreen(new Point(Width+8,0)),layout.Scale);
         }
         void PollHover()
         {
+            if(CardsVisible){HideTooltip();return;}
             POINT pointer=new POINT();
             bool available = IsHandleCreated && !IsDisposed && Visible && hostWindow != IntPtr.Zero &&
                 IsWindowVisible(Handle) && WindowLocator.IsForeground(hostWindow) && GetCursorPos(out pointer);
@@ -106,9 +133,10 @@ namespace CodexUsageRings
             if (message.Msg == 0x21) { message.Result = new IntPtr(3); return; }
             base.WndProc(ref message);
         }
-        protected override void OnHandleDestroyed(EventArgs e) { HideTooltip();base.OnHandleDestroyed(e); }
+        protected override void OnHandleDestroyed(EventArgs e) { HideTooltip();if(cards!=null)cards.HidePanel();base.OnHandleDestroyed(e); }
         public void Render(RingLayout nextLayout, UsageSnapshot nextSnapshot, ModeState mode, bool allowMotion=true)
         {
+            refill.Observe(nextSnapshot,DateTime.UtcNow,animationClock.ElapsedMilliseconds);
             layout = nextLayout; snapshot = nextSnapshot; Rectangle hostBounds=WindowLocator.GetHostBounds(hostWindow);
             if(hostBounds.IsEmpty) return;
             Rectangle relative=layout.Bounds;relative.Offset(-hostBounds.Left,-hostBounds.Top);
@@ -116,9 +144,13 @@ namespace CodexUsageRings
             SetWindowPos(Handle,IntPtr.Zero,relative.X,relative.Y,relative.Width,relative.Height,0x10);
             using (Bitmap bitmap = new Bitmap(Width, Height, PixelFormat.Format32bppArgb))
             {
-                using (Graphics g = Graphics.FromImage(bitmap)) { g.Clear(Color.Transparent); RingPainter.Draw(g, layout, snapshot, DateTime.UtcNow, mode, allowMotion); }
+                using (Graphics g = Graphics.FromImage(bitmap)) {
+                    g.Clear(Color.Transparent);
+                    RingPainter.Draw(g, layout, snapshot, DateTime.UtcNow, mode, allowMotion,refill.Sample(false,animationClock.ElapsedMilliseconds),refill.Sample(true,animationClock.ElapsedMilliseconds));
+                }
                 SetBitmap(bitmap);
             }
+            if(CardsVisible)cards.MoveNear(PointToScreen(new Point(Width+8,0)));
         }
         void SetBitmap(Bitmap bitmap)
         {
@@ -143,7 +175,7 @@ namespace CodexUsageRings
         }
 
         protected override void Dispose(bool disposing) {
-            if(disposing) { hoverTimer.Stop();hoverTimer.Dispose();if(tip!=null)tip.Dispose(); }
+            if(disposing) { hoverTimer.Stop();hoverTimer.Dispose();if(tip!=null)tip.Dispose();if(cards!=null)cards.Dispose();if(resetService!=null)resetService.Dispose(); }
             base.Dispose(disposing);
         }
         [StructLayout(LayoutKind.Sequential)] struct POINT { public int X,Y; public POINT(int x,int y) { X=x;Y=y; } }

@@ -42,7 +42,7 @@ namespace CodexUsageRings
                     Directory.CreateDirectory(DataDirectory);
                     using (EventWaitHandle stop = new EventWaitHandle(false, EventResetMode.ManualReset, StopEventName)) {
                         stop.Reset();
-                        using (OverlayContext context = new OverlayContext(stop)) Application.Run(context);
+                        using (OverlayContext context = new OverlayContext(stop,true)) Application.Run(context);
                     }
                     singleton.ReleaseMutex();
                 }
@@ -56,7 +56,7 @@ namespace CodexUsageRings
         {
             DateTime now = DateTime.UtcNow;
             return new {
-                version = "0.3.5", checkedAtUtc = now.ToString("o"), pid = System.Diagnostics.Process.GetCurrentProcess().Id,
+                version = "0.4.6", checkedAtUtc = now.ToString("o"), pid = System.Diagnostics.Process.GetCurrentProcess().Id,
                 effects = new { purple = visible && mode!=null && mode.ModelFresh(now) && mode.Ultra, fastFlow = visible && mode!=null && mode.Fresh(now) && mode.Fast && (renderGuard==null||renderGuard.MotionAllowed(now)) },
                 presentation = "native-child", embedded = embedded, hover = hover,
                 rendering = renderGuard,
@@ -154,9 +154,10 @@ namespace CodexUsageRings
         volatile bool readingUsage, readingAnchor, closing;
         DateTime nextUsage=DateTime.MinValue, nextAnchor=DateTime.MinValue, nextStatus=DateTime.MinValue;
         DateTime anchorAt=DateTime.MinValue;
-        public OverlayContext(EventWaitHandle stopEvent)
+        readonly bool warmResetCards;
+        public OverlayContext(EventWaitHandle stopEvent,bool prefetchResetCards=false)
         {
-            stop=stopEvent;
+            stop=stopEvent;warmResetCards=prefetchResetCards;
             tray=new NotifyIcon{Icon=SystemIcons.Information,Visible=true,Text="Codex 用量圆环 · 7d / 5h"};
             ContextMenuStrip menu=new ContextMenuStrip();
             menu.Items.Add("刷新额度",null,delegate { nextUsage=DateTime.MinValue; });
@@ -206,7 +207,9 @@ namespace CodexUsageRings
                     ModeState displayMode=mode;
                     
                     if(form.IsDisposed)form=new OverlayForm();
+                    form.ResetFinished=delegate { nextUsage=DateTime.MinValue; };
                     form.BindToHost(current.Hwnd);
+                    if(warmResetCards)form.PrepareCards();
                     if(!form.Visible)form.Show();
                     form.Render(layout,usage,displayMode,allowMotion);
                 },now);

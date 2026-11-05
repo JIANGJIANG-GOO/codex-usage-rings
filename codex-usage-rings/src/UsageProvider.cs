@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -222,9 +222,20 @@ namespace CodexUsageRings
 
         private UsageSnapshot FetchRpc()
         {
+            string response=RequestRpc("account/rateLimits/read",new {excludeResetCreditDetails=true,supportsLunaReserve=false});
+            return response==null?Unavailable(DateTime.UtcNow,"暂时无法读取额度"):ParseRpc(response,DateTime.UtcNow);
+        }
+        internal string AccountRpc(string method,object parameters)
+        {
+            if(method!="account/rateLimits/read" && method!="account/rateLimitResetCredit/consume")throw new ArgumentException("Unsupported method");
+            lock(fetchGate) { if(IsCanceled)return null;return RequestRpc(method,parameters); }
+        }
+
+        private string RequestRpc(string method, object parameters)
+        {
             DateTime sampled = DateTime.UtcNow;
             string executable = FindBundledCodex();
-            if (executable == null) return Unavailable(sampled, "未找到 Codex 内置程序");
+            if (executable == null) return null;
             Process process = null;
             RpcInbox inbox = new RpcInbox();
             Stopwatch timer = Stopwatch.StartNew();
@@ -247,8 +258,8 @@ namespace CodexUsageRings
                 process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs args) { };
                 lock (processGate)
                 {
-                    if (canceled) return CanceledSnapshot();
-                    if (!process.Start()) return Unavailable(sampled, "无法启动额度读取程序");
+                    if (canceled) return null;
+                    if (!process.Start()) return null;
                     activeChild = process;
                     activeInbox = inbox;
                 }
@@ -259,17 +270,17 @@ namespace CodexUsageRings
                 string initialized = inbox.WaitFor(1, timer);
                 Dictionary<string, object> initializeReply = ReadObject(initialized);
                 if (initializeReply == null || ValueAt(initializeReply, "error") != null || ObjectAt(initializeReply, "result") == null)
-                    return Unavailable(sampled, "额度连接未就绪或读取超时");
+                    return null;
                 process.StandardInput.WriteLine("{\"method\":\"initialized\"}");
-                process.StandardInput.WriteLine("{\"id\":2,\"method\":\"account/rateLimits/read\",\"params\":{\"excludeResetCreditDetails\":true,\"supportsLunaReserve\":false}}");
+                process.StandardInput.WriteLine(new JavaScriptSerializer().Serialize(new { id=2, method=method, @params=parameters }));
                 process.StandardInput.Flush();
                 string response = inbox.WaitFor(2, timer);
-                return response == null ? Unavailable(sampled, "额度读取超时或连接已关闭") : ParseRpc(response, DateTime.UtcNow);
+                return response;
             }
             catch (Exception)
             {
                 // Deliberately do not expose raw process or RPC errors in UI/status fields.
-                return Unavailable(sampled, "暂时无法读取额度");
+                return null;
             }
             finally
             {
