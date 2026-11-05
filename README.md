@@ -14,7 +14,7 @@
 
 ## 安装和启动
 
-1. 从本仓库 Releases 下载 `Codex-Usage-Rings-0.3.3.zip` 并完整解压到固定目录。
+1. 从本仓库 Releases 下载 `Codex-Usage-Rings-0.4.9.zip` 并完整解压到固定目录。
 2. 运行 `codex-usage-rings/Start.cmd`。停止时运行 `Stop.cmd`，或从托盘菜单退出。
 3. 在 Codex 中展开模型菜单约 2 秒，让程序读取 Fast 开关。随后可关闭菜单；每次重启伴随程序后需重新读取一次。
 
@@ -37,6 +37,10 @@
 codex plugin add codex-usage-rings@local-usage-rings
 ```
 
+## 升级已有安装
+
+先运行旧目录的 `codex-usage-rings/Stop.cmd`，再将新安装包完整解压覆盖到原固定目录，然后运行 `Start.cmd`。若改用新目录且以前设置过登录自启，请先在新目录运行 `AutoStart.ps1` 更新任务路径，再启动，避免旧任务继续运行旧版。
+
 ## 从源码构建
 
 Windows x64，使用系统 .NET Framework 4.x 自带 C# 编译器，不需下载构建依赖。
@@ -46,6 +50,7 @@ Windows x64，使用系统 .NET Framework 4.x 自带 C# 编译器，不需下载
 .\codex-usage-rings\Test.ps1
 .\codex-usage-rings\Test-Native.ps1
 .\codex-usage-rings\Test-Hover.ps1
+.\codex-usage-rings\Test-Reset.ps1
 ```
 
 源码仓库不包含编译产物；`Start.cmd` 会在程序缺失时尝试构建。Release 安装包包含预编译程序。
@@ -62,9 +67,9 @@ Codex 窗口可见且定位可靠时显示；切换到其他应用不隐藏圆�
 
 运行 `codex-usage-rings/Status.ps1`。状态文件位于 `%LOCALAPPDATA%/CodexUsageRings/status.json`，包含定位、模式识别、绘制与悬停诊断。
 
-v0.4.6 源码验证：299 项常规检查、64,000 帧渲染、135 项悬停检查；原生窗口移动、重连、后台显示、最小化与恢复测试通过；用户实机确认切换应用和切回均正常。
+v0.4.9 验证：319 项常规检查、64,000 帧渲染、135 项悬停检查；原生窗口移动、重连、后台显示、最小化与恢复测试通过；用户实机确认切换应用和切回均正常。
 
-当前源码包含后台 Fast 刷新、切换思考强度时保留 Fast 状态，以及手动重置卡面板；Release 安装包暂为 v0.3.3。
+当前源码包含后台 Fast 刷新、切换思考强度时保留 Fast 状态，以及手动重置卡面板；Release 安装包为 v0.4.9。
 
 ## 重置卡
 

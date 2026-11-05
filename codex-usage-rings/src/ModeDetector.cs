@@ -11,8 +11,9 @@ namespace CodexUsageRings {
  public sealed class ModeState {
   public bool Ultra,Fast,Working,FastKnown,ModelKnown;
   public string ModelSource="unknown";
-  internal string ContextKey="",SelectedModel="";internal bool PickerOpen,ContextAmbiguous;
+  internal string ContextKey="",SelectedModel="";internal bool PickerOpen,ContextAmbiguous;internal DateTime ScanStartedAtUtc;
   public string FastSource="unknown";
+  public int FastEventCount;public bool FastListenerActive;
   public DateTime CapturedAtUtc,ModelObservedAtUtc;
   public bool ModelFresh(DateTime now) { return ModelKnown && now>=ModelObservedAtUtc && (now-ModelObservedAtUtc).TotalSeconds<=120; }
   public string[] Evidence=new string[0];
@@ -50,13 +51,18 @@ namespace CodexUsageRings {
    // so an effort-only change must not invalidate a confirmed checkbox value.
    model=Regex.Replace((model??"").Trim(),@"\s+(?:extra high|xhigh|ultra|high|medium|low|minimal)$","",RegexOptions.IgnoreCase);
    if(String.IsNullOrEmpty(context)||String.IsNullOrEmpty(model)) {
-    if(state.FastKnown && !String.IsNullOrEmpty(lastContext) && (now-lastSeen).TotalMinutes<2) {
+    if(state.FastKnown && !String.IsNullOrEmpty(context)) {
+     // The picker can hide the model button before we have ever sampled it.
+     // Bind this direct checkbox observation only when this exact chat's
+     // model reappears, rather than silently dropping it.
+     pending=state.Fast;pendingContext=context;pendingModel="";pendingAt=now;
+    } else if(state.FastKnown && !String.IsNullOrEmpty(lastContext) && (now-lastSeen).TotalMinutes<2) {
      pending=state.Fast;pendingContext=lastContext;pendingModel=lastModel;pendingAt=now;
     }
     return;
    }
    if(pending.HasValue) {
-    if(!state.FastKnown && context==pendingContext && model==pendingModel && (now-pendingAt).TotalMinutes<2) {
+    if(!state.FastKnown && context==pendingContext && (pendingModel.Length==0||model==pendingModel) && now>=pendingAt && (now-pendingAt).TotalMinutes<2) {
      state.Fast=pending.Value;state.FastKnown=true;state.FastSource="confirmed-checkbox-cache";
     }
     pending=null;
@@ -73,10 +79,24 @@ namespace CodexUsageRings {
    }
   }
  }
- public sealed class ModeDetector {
+ public sealed class FastToggleEvents {
+  readonly object gate=new object();string context="";bool fast,pending;DateTime observed;
+  public void Record(string owner,bool enabled,DateTime now) {lock(gate){context=owner;fast=enabled;observed=now;pending=true;}}
+  public void Apply(ModeState state,DateTime now) {
+   lock(gate) {
+    if(!pending)return;pending=false;
+    if(String.IsNullOrEmpty(context)||context!=state.ContextKey||state.ContextAmbiguous||now<observed||(now-observed).TotalSeconds>5)return;
+    if(state.FastKnown&&state.ScanStartedAtUtc>observed)return;
+    state.FastKnown=true;state.Fast=fast;state.FastSource="uia-toggle-event";
+   }
+  }
+ }
+ public sealed class ModeDetector : IDisposable {
   static readonly object Gate=new object();static Thread worker;
   readonly FastModeMemory fastMemory=new FastModeMemory();
   readonly ModelSelectionMemory modelMemory=new ModelSelectionMemory();
+  readonly FastToggleEvents toggleEvents=new FastToggleEvents();
+  readonly object watchGate=new object();AutomationElement watched;AutomationPropertyChangedEventHandler watchHandler;string watchedId="",watchContext="";volatile int watchGeneration;volatile bool disposed;int fastEventCount;
   public ModeState Read(IntPtr hwnd) {
    if(hwnd==IntPtr.Zero)return new ModeState();
    ModeState result=null;Thread current;
@@ -89,18 +109,52 @@ namespace CodexUsageRings {
   }
   ModeState Resolve(ModeState state,IntPtr hwnd) {
    modelMemory.Apply(state,hwnd.ToString(),state.ContextKey,state.SelectedModel,state.PickerOpen,DateTime.UtcNow);
+   toggleEvents.Apply(state,DateTime.UtcNow);
+   fastMemory.Apply(state,state.ContextAmbiguous?"":state.ContextKey,state.SelectedModel,DateTime.UtcNow);
+   lock(watchGate){watchContext=state.ContextAmbiguous?"":state.ContextKey;state.FastListenerActive=watched!=null;}
+   state.FastEventCount=fastEventCount;
    return state;
   }
+  void WatchFastControl(AutomationElement control) {
+   lock(watchGate) {
+    if(disposed||String.IsNullOrEmpty(watchContext))return;
+    string id=String.Join(",",control.GetRuntimeId())+":"+watchContext;
+    if(id==watchedId)return;
+    ClearWatch();int generation=watchGeneration;string owner=watchContext;
+    AutomationPropertyChangedEventHandler handler=delegate(object sender,AutomationPropertyChangedEventArgs e) {
+     try {
+      if(disposed||generation!=watchGeneration)return;
+      // ToggleState is the actual switch value. Its label can lag by a frame.
+      if(e.Property==TogglePattern.ToggleStateProperty) {
+       ToggleState value=(ToggleState)Convert.ToInt32(e.NewValue);
+       if(value!=ToggleState.Indeterminate){Interlocked.Increment(ref fastEventCount);toggleEvents.Record(owner,value==ToggleState.On,DateTime.UtcNow);}
+      }
+     }catch { }
+    };
+    try {
+     Automation.AddAutomationPropertyChangedEventHandler(control,TreeScope.Element,handler,TogglePattern.ToggleStateProperty);
+     watched=control;watchHandler=handler;watchedId=id;
+    } catch {ClearWatch();}
+   }
+  }
+  void ClearWatch() {
+   watchGeneration++;
+   if(watched!=null&&watchHandler!=null)try{Automation.RemoveAutomationPropertyChangedEventHandler(watched,watchHandler);}catch{}
+   watched=null;watchHandler=null;watchedId="";
+  }
+  public void Dispose(){lock(watchGate){disposed=true;ClearWatch();}}
   ModeState Scan(IntPtr hwnd) {
+   DateTime scanStarted=DateTime.UtcNow;
    Rectangle host=WindowLocator.GetHostBounds(hwnd);float scale=WindowLocator.GetScale(hwnd);
    if(host.IsEmpty)return new ModeState();
    var composer=new System.Windows.Rect(host.Left+72*scale,Math.Max(host.Top,host.Bottom-320*scale),Math.Max(0,host.Width-72*scale),Math.Min(host.Height,320*scale));
    var sidebar=new System.Windows.Rect(host.Left,host.Top,Math.Min(600*scale,host.Width*.42),host.Height);
+   var header=new System.Windows.Rect(host.Left,host.Top,host.Width,Math.Min(host.Height,150*scale));
    var cache=new CacheRequest();cache.TreeScope=TreeScope.Element;
    cache.Add(AutomationElement.NameProperty);cache.Add(AutomationElement.BoundingRectangleProperty);cache.Add(AutomationElement.ControlTypeProperty);cache.Add(AutomationElement.IsOffscreenProperty);cache.Add(AutomationElement.ClassNameProperty);
    var walker=TreeWalker.ControlViewWalker;
    var pending=new Stack<Tuple<AutomationElement,int>>();pending.Push(Tuple.Create(AutomationElement.FromHandle(hwnd),0));
-   var labels=new List<string>();var contexts=new List<string>();string model="";
+   var labels=new List<string>();var contexts=new List<string>();var toolbarContexts=new List<string>();string model="";
    bool? fastSignal=null;bool conflict=false,pickerOpen=false;
    var timer=Stopwatch.StartNew();int nodes=0;
    while(pending.Count>0) {
@@ -108,9 +162,15 @@ namespace CodexUsageRings {
     while(child!=null) {
      if(++nodes>1400||timer.ElapsedMilliseconds>1500)return new ModeState{Reason="模式扫描超过时限"};
      var info=child.Cached;var b=info.BoundingRectangle;
-     bool bottom=!b.IsEmpty&&b.IntersectsWith(composer),left=!b.IsEmpty&&b.IntersectsWith(sidebar);
-     if(!info.IsOffscreen&&(bottom||left)) {
+     bool bottom=!b.IsEmpty&&b.IntersectsWith(composer),left=!b.IsEmpty&&b.IntersectsWith(sidebar),top=!b.IsEmpty&&b.IntersectsWith(header);
+     if(!info.IsOffscreen&&(bottom||left||top)) {
       string name=info.Name??"",css=info.ClassName??"";
+      if(top&&info.ControlType==ControlType.ToolBar&&name=="Chat toolbar") {
+       var titles=child.FindAll(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Text));
+       var names=new List<string>();foreach(AutomationElement title in titles)if(!title.Current.IsOffscreen&&!String.IsNullOrWhiteSpace(title.Current.Name))names.Add(title.Current.Name);
+       string key=ChatToolbarContext(hwnd.ToString(),name,names.ToArray(),child.GetRuntimeId());
+       if(key.Length>0)toolbarContexts.Add(key);
+      }
       if(css.Contains("FastModeToggle")||css.Contains("_ViewToggle_")||css.Contains("_SliderKeyboardControl_"))pickerOpen=true;
       if(left&&info.ControlType==ControlType.Button&&css.Contains("sidebar-item")&&Regex.IsMatch(css,@"(^|\s)bg-primary-ghost-hover(\s|$)")) {
        // Bind to the selected sidebar element, not the most recent chat or a global default.
@@ -121,7 +181,7 @@ namespace CodexUsageRings {
       }
       if(bottom&&css.Contains("FastModeToggle")) {
        ToggleState? toggle=null;object pattern;
-       if(child.TryGetCurrentPattern(TogglePattern.Pattern,out pattern))toggle=((TogglePattern)pattern).Current.ToggleState;
+       if(child.TryGetCurrentPattern(TogglePattern.Pattern,out pattern)){WatchFastControl(child);toggle=((TogglePattern)pattern).Current.ToggleState;}
        bool value;
        if(TryFastControl(name,info.ControlType,toggle,out value)) {
         if(fastSignal.HasValue&&fastSignal.Value!=value)conflict=true;
@@ -129,16 +189,23 @@ namespace CodexUsageRings {
        }
       }
      }
-     if(!info.IsOffscreen&&branch.Item2<64&&(bottom||left||(b.IsEmpty&&branch.Item2<3)))pending.Push(Tuple.Create(child,branch.Item2+1));
+     if(!info.IsOffscreen&&branch.Item2<64&&(bottom||left||top||(b.IsEmpty&&branch.Item2<3)))pending.Push(Tuple.Create(child,branch.Item2+1));
      child=walker.GetNextSibling(child,cache);
     }
    }
+   if(toolbarContexts.Count>0)contexts=toolbarContexts;
    var state=FromLabels(labels.ToArray(),DateTime.UtcNow);
+   state.ScanStartedAtUtc=scanStarted;
    state.ContextKey=contexts.Count==1?contexts[0]:"";state.ContextAmbiguous=contexts.Count>1;state.SelectedModel=model;state.PickerOpen=pickerOpen;
    state.FastKnown=fastSignal.HasValue&&!conflict;state.Fast=state.FastKnown&&fastSignal.Value;state.FastSource=state.FastKnown?"uia-checkbox":"unknown";
-   fastMemory.Apply(state,contexts.Count==1?contexts[0]:"",model,state.CapturedAtUtc);
    state.Reason="当前输入区与 Fast 开关；聊天定位="+(contexts.Count==1?"唯一":"未知")+"；nodes="+nodes;
    return state;
+  }
+  public static string ChatToolbarContext(string host,string toolbarName,string[] titles,int[] runtimeId) {
+   if(toolbarName!="Chat toolbar"||titles==null||titles.Length!=1||String.IsNullOrWhiteSpace(titles[0])||runtimeId==null||runtimeId.Length==0)return "";
+   // Scope by the actual toolbar instance as well as title: two chats with the
+   // same title must not share a Fast observation. Never expose raw titles.
+   using(var hash=SHA256.Create())return host+":toolbar:"+Convert.ToBase64String(hash.ComputeHash(Encoding.UTF8.GetBytes(String.Join(",",runtimeId)+":"+titles[0])));
   }
   public static bool TryFastControl(string name,ControlType type,ToggleState? toggle,out bool enabled) {
    enabled=false;

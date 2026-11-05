@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -56,7 +56,7 @@ namespace CodexUsageRings
         {
             DateTime now = DateTime.UtcNow;
             return new {
-                version = "0.4.6", checkedAtUtc = now.ToString("o"), pid = System.Diagnostics.Process.GetCurrentProcess().Id,
+                version = "0.4.9", checkedAtUtc = now.ToString("o"), pid = System.Diagnostics.Process.GetCurrentProcess().Id,
                 effects = new { purple = visible && mode!=null && mode.ModelFresh(now) && mode.Ultra, fastFlow = visible && mode!=null && mode.Fresh(now) && mode.Fast && (renderGuard==null||renderGuard.MotionAllowed(now)) },
                 presentation = "native-child", embedded = embedded, hover = hover,
                 rendering = renderGuard,
@@ -234,7 +234,7 @@ namespace CodexUsageRings
         }
         protected override void ExitThreadCore()
         {
-            closing=true; timer.Stop(); provider.Cancel(); tray.Visible=false; form.Close(); base.ExitThreadCore();
+            closing=true; timer.Stop(); provider.Cancel(); modeDetector.Dispose(); tray.Visible=false; form.Close(); base.ExitThreadCore();
         }
         protected override void Dispose(bool disposing)
         {
