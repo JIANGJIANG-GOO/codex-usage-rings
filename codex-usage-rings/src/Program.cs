@@ -56,7 +56,7 @@ namespace CodexUsageRings
         {
             DateTime now = DateTime.UtcNow;
             return new {
-                version = "0.4.9", checkedAtUtc = now.ToString("o"), pid = System.Diagnostics.Process.GetCurrentProcess().Id,
+                version = "0.4.10", checkedAtUtc = now.ToString("o"), pid = System.Diagnostics.Process.GetCurrentProcess().Id,
                 effects = new { purple = visible && mode!=null && mode.ModelFresh(now) && mode.Ultra, fastFlow = visible && mode!=null && mode.Fresh(now) && mode.Fast && (renderGuard==null||renderGuard.MotionAllowed(now)) },
                 presentation = "native-child", embedded = embedded, hover = hover,
                 rendering = renderGuard,
@@ -158,7 +158,7 @@ namespace CodexUsageRings
         public OverlayContext(EventWaitHandle stopEvent,bool prefetchResetCards=false)
         {
             stop=stopEvent;warmResetCards=prefetchResetCards;
-            tray=new NotifyIcon{Icon=SystemIcons.Information,Visible=true,Text="Codex 用量圆环 · 7d / 5h"};
+            tray=new NotifyIcon{Icon=SystemIcons.Information,Visible=false,Text="Codex 用量圆环 · 7d / 5h"};
             ContextMenuStrip menu=new ContextMenuStrip();
             menu.Items.Add("刷新额度",null,delegate { nextUsage=DateTime.MinValue; });
             menu.Items.Add("退出圆环",null,delegate { stop.Set(); });

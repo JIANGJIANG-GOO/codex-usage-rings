@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.10
+
+- 默认隐藏 Windows 通知区域托盘图标，圆环和后台任务继续运行；使用 Stop.cmd 停止程序。
+
 ## v0.4.9
 
 - 监听 Fast 开关的 UI Automation ToggleState 变化，保留快速关闭并收起菜单前的最后一次事件，避免轮询漏读后沿用开启缓存。

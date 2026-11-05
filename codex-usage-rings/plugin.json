@@ -1,7 +1,7 @@
 ﻿{
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "codex-usage-rings",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "description": "Windows companion overlay showing remaining Codex 7d and 5h quota above the account avatar.",
   "extensions": {
     "com.openai": {
